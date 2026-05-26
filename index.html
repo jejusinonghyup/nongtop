@@ -17,11 +17,11 @@
         .score-box { background: rgba(255, 255, 255, 0.95); padding: 10px 18px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); border: 2px solid #009944; }
         #score-display { font-size: 24px; font-weight: 900; color: #ff6b00; }
         
-        /* 👇 층수(Floor)를 우측 상단으로 이동 */
+        /* 층수(Floor) 배지: 우측 상단 배치 */
         #floor-badge { background: linear-gradient(135deg, #FFD700, #FFA500); color: #fff; padding: 8px 20px; border-radius: 25px; font-size: 18px; font-weight: 900; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.4); border: 2px solid #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.2); z-index: 11; display: none; animation: bounce 0.3s ease-out; margin-top: 6px; }
         @keyframes bounce { 0% { transform: translateY(-10px) scale(0.8); } 70% { transform: translateY(5px) scale(1.1); } 100% { transform: translateY(0) scale(1); } }
         
-        /* 👇 콤보(Combo)를 화면 중앙 아래로 이동 */
+        /* 콤보(Combo) 배지: 화면 중앙 배치 */
         #combo-display { position: absolute; top: calc(env(safe-area-inset-top, 20px) + 65px); left: 50%; font-size: 22px; font-weight: 900; color: #ff2a2a; text-align: center; text-shadow: 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff; opacity: 0; transform: translateX(-50%) scale(0.5); transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 11; }
         #combo-display.show { opacity: 1; transform: translateX(-50%) scale(1.1); }
         
@@ -98,8 +98,8 @@
                     <input type="email" id="reg-email" placeholder="경품 당첨 시 연락받을 이메일" autocomplete="off">
                 </div>
                 <div class="input-group">
-                    <label for="reg-password">비밀번호 (4자리)</label>
-                    <input type="password" id="reg-password" placeholder="내 기록 보호용 숫자 4자리" maxlength="4" pattern="\d*">
+                    <label for="reg-password">휴대폰 뒷자리 (4자리)</label>
+                    <input type="password" id="reg-password" placeholder="본인 확인용 휴대폰 뒷자리 4개" maxlength="4" pattern="\d*">
                 </div>
                 
                 <div class="privacy-box">
@@ -217,8 +217,9 @@
             const errorEl = document.getElementById('form-error');
             const btn = document.getElementById('btn-login');
 
+            // 👇 안내 문구 수정 (휴대폰 뒷자리 숫자 4개)
             if (!nickname || !email || password.length !== 4) {
-                errorEl.innerText = "모든 항목을 정확히 입력해 주세요 (비밀번호 숫자 4자리)."; errorEl.style.display = 'block'; return;
+                errorEl.innerText = "모든 항목을 정확히 입력해 주세요 (휴대폰 뒷자리 숫자 4개)."; errorEl.style.display = 'block'; return;
             }
             if(!email.includes('@')) {
                 errorEl.innerText = "올바른 이메일 주소 형식을 입력해 주세요."; errorEl.style.display = 'block'; return;
@@ -236,7 +237,8 @@
 
                 if (docSnap.exists) {
                     if (docSnap.data().password !== password) {
-                        errorEl.innerText = "이미 사용 중인 닉네임이거나 비밀번호가 틀립니다."; 
+                        // 👇 안내 문구 수정
+                        errorEl.innerText = "이미 사용 중인 닉네임이거나 휴대폰 뒷자리가 틀립니다."; 
                         errorEl.style.display = 'block';
                         btn.innerText = "랭킹전 참가하기"; btn.style.opacity = "1"; btn.disabled = false;
                         return;
@@ -407,7 +409,9 @@
         }
 
         function createNewBox() {
-            currentFloor++; speed = Math.min(0.15 + (currentFloor * 0.006), 0.45); 
+            currentFloor++; 
+            speed = Math.min(0.15 + (currentFloor * 0.012), 0.55); 
+            
             const badge = document.getElementById('floor-badge'); badge.innerText = `${currentFloor}층`; badge.style.display = 'block'; badge.style.animation = 'none'; badge.offsetHeight; badge.style.animation = null;
 
             const prev = boxes[boxes.length - 1];
@@ -429,4 +433,132 @@
         function showFloatingPoints(addedKg, isPerfect) {
             if(!currentBox) return;
             const el = document.createElement('div'); el.className = 'floating-text'; el.innerText = `+${addedKg} kg`;
-            el.style.color = (currentBox.isSpecial && isPerfect) ? '#FFD700' : (isPerfect ? '#00ff00' :
+            el.style.color = (currentBox.isSpecial && isPerfect) ? '#FFD700' : (isPerfect ? '#00ff00' : '#ff6b00');
+            el.style.fontSize = (currentBox.isSpecial && isPerfect) ? '38px' : (isPerfect ? '32px' : '24px');
+            
+            const v = currentBox.mesh.position.clone(); v.project(camera);
+            el.style.left = `${(v.x * 0.5 + 0.5) * window.innerWidth}px`; el.style.top = `${(v.y * -0.5 + 0.5) * window.innerHeight - 30}px`; 
+            document.body.appendChild(el); setTimeout(() => el.remove(), 1000);
+        }
+
+        function handleTap(e) {
+            if (e.target.closest('.panel') || e.target.closest('.btn-rank') || e.target.closest('#rank-modal')) return;
+            if (gameState !== 'playing') return;
+
+            const prev = boxes[boxes.length - 2], curr = currentBox;
+            const diff = curr.mesh.position[movingAxis] - prev.mesh.position[movingAxis], absDiff = Math.abs(diff);
+            const currentSize = movingAxis === 'x' ? curr.width : curr.depth;
+
+            if (absDiff > currentSize) {
+                if (curr.isSpecial) showMessage(`내 ${curr.productName} 엎어짐... 😱`, '#ff2a2a');
+                document.getElementById('over-reason-text').innerText = curr.isSpecial ? `앗! 스페셜 보너스 박스를 통째로 떨어뜨렸습니다!` : `앗, 상자가 허공으로 떨어졌습니다!`;
+                scene.remove(curr.mesh); scene.add(curr.mesh); 
+                debris.push({ mesh: curr.mesh, vx: movingAxis === 'x' ? movingDir * speed * 1.5 : 0, vy: 0.1, vz: movingAxis === 'z' ? movingDir * speed * 1.5 : 0, rx: movingAxis === 'z' ? 0.08 * movingDir : 0, rz: movingAxis === 'x' ? -0.08 * movingDir : 0 });
+                endGame(); return;
+            }
+
+            if (absDiff <= 0.4) {
+                curr.mesh.position[movingAxis] = prev.mesh.position[movingAxis]; comboCount++;
+                let gainedKg = Math.floor(curr.width * curr.depth);
+                if (curr.isSpecial) { gainedKg += 100; showMessage(`✨ ${curr.productName} 완벽 수확! +100kg 🎉`, '#FFD700'); } 
+                else if (comboCount > 1) { showMessage(`퍼펙트! ${comboCount} 연속`, '#00ff00'); }
+                
+                const totalGained = gainedKg + (comboCount * 5);
+                updateScore(totalGained); showFloatingPoints(totalGained, true); showCombo(); createNewBox(); return;
+            }
+
+            if (curr.isSpecial) showMessage(`앗! 아까운 ${curr.productName}... 😭`, '#ff8c00');
+            comboCount = 0; document.getElementById('combo-display').classList.remove('show');
+            const overlap = currentSize - absDiff;
+            if (movingAxis === 'x') { curr.width = overlap; } else { curr.depth = overlap; }
+
+            const newPos = prev.mesh.position[movingAxis] + (diff / 2);
+            curr.mesh.position[movingAxis] = newPos; curr.mesh.geometry.dispose(); curr.mesh.geometry = new THREE.BoxGeometry(curr.width, boxHeight, curr.depth);
+
+            const dSize = absDiff, dPos = newPos + (overlap / 2 + dSize / 2) * Math.sign(diff);
+            const dMesh = new THREE.Mesh(new THREE.BoxGeometry(movingAxis === 'x' ? dSize : curr.width, boxHeight, movingAxis === 'z' ? dSize : curr.depth), curr.mesh.material);
+            dMesh.position.set(movingAxis === 'x' ? dPos : curr.mesh.position.x, (currentFloor - 0.5) * boxHeight, movingAxis === 'z' ? dPos : curr.mesh.position.z);
+            scene.add(dMesh); debris.push({ mesh: dMesh, vx: movingAxis === 'x' ? Math.sign(diff) * 0.1 : 0, vy: 0.05, vz: movingAxis === 'z' ? Math.sign(diff) * 0.1 : 0, rx: movingAxis === 'z' ? 0.07 * Math.sign(diff) : 0, rz: movingAxis === 'x' ? -0.07 * Math.sign(diff) : 0 });
+
+            const gainedKg = Math.max(1, Math.floor(curr.width * curr.depth));
+            updateScore(gainedKg); showFloatingPoints(gainedKg, false); createNewBox();
+        }
+
+        function updateScore(addKg) { currentScore += addKg; document.getElementById('score-display').innerText = `${currentScore} kg`; }
+        function showCombo() { if (comboCount >= 2) { const el = document.getElementById('combo-display'); el.innerText = `${comboCount} Combo!`; el.classList.add('show'); el.style.animation = 'none'; el.offsetHeight; el.style.animation = null; } }
+        
+        function showMessage(text, color) {
+            const msg = document.getElementById('message'); msg.innerText = text; msg.style.color = color; msg.style.opacity = 1;
+            let start = null;
+            function animateMsg(time) {
+                if(!start) start = time;
+                if (time - start < 1200) { msg.style.opacity = 1 - ((time - start) / 1200); requestAnimationFrame(animateMsg); } else { msg.style.opacity = 0; }
+            }
+            requestAnimationFrame(animateMsg);
+        }
+
+        function startGame() {
+            if (!checkEventTime()) return; 
+
+            document.getElementById('start-screen').style.display = 'none'; document.getElementById('start-panel').classList.remove('show');
+            document.getElementById('floor-badge').style.display = 'block'; gameState = 'playing'; createNewBox();
+        }
+
+        function endGame() {
+            gameState = 'gameover';
+            
+            const isNewScoreHigher = currentScore > userSession.topScore;
+            const isScoreEqualButFloorHigher = (currentScore === userSession.topScore) && (currentFloor > userSession.topFloor);
+
+            if (userSession && (isNewScoreHigher || isScoreEqualButFloorHigher)) {
+                userSession.topScore = currentScore;
+                userSession.topFloor = currentFloor;
+                localStorage.setItem('nongtop_user', JSON.stringify(userSession));
+                
+                db.collection('users').doc(userSession.nickname).update({
+                    topScore: currentScore,
+                    topFloor: currentFloor,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }).catch(err => console.error("점수 업데이트 실패", err));
+            }
+
+            setTimeout(() => {
+                document.getElementById('game-over-panel').style.display = 'flex';
+                setTimeout(() => { document.getElementById('result-panel').classList.add('show'); }, 50);
+                document.getElementById('final-score-text').innerText = `${currentScore} kg`;
+            }, 800); 
+        }
+
+        function resetGame() {
+            document.getElementById('result-panel').classList.remove('show');
+            setTimeout(() => { document.getElementById('game-over-panel').style.display = 'none'; }, 300);
+            boxes.forEach(b => scene.remove(b.mesh)); debris.forEach(d => scene.remove(d.mesh));
+            boxes = []; debris = []; currentFloor = 1; currentScore = 0; comboCount = 0; updateScore(0);
+            document.getElementById('floor-badge').innerText = `1층`; document.getElementById('combo-display').classList.remove('show');
+            targetCamY = 15; currentCamY = 15; targetLookY = 0; currentLookY = 0; camera.position.set(12, 15, 12); camera.lookAt(0, 0, 0);
+            createBaseBox(); gameState = 'playing'; createNewBox();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            const timeScale = Math.min(delta * 60, 3); 
+
+            if (gameState === 'playing' && currentBox) {
+                currentBox.mesh.position[movingAxis] += speed * movingDir * timeScale;
+                if (currentBox.mesh.position[movingAxis] > 16) movingDir = -1; if (currentBox.mesh.position[movingAxis] < -16) movingDir = 1;
+            }
+            currentCamY += (targetCamY - currentCamY) * (0.08 * timeScale); currentLookY += (targetLookY - currentLookY) * (0.08 * timeScale);
+            camera.position.y = currentCamY; camera.lookAt(0, currentLookY, 0);
+            for (let i = debris.length - 1; i >= 0; i--) {
+                let d = debris[i]; d.vy -= 0.03 * timeScale; 
+                d.mesh.position.x += d.vx * timeScale; d.mesh.position.y += d.vy * timeScale; d.mesh.position.z += d.vz * timeScale;
+                d.mesh.rotation.x += d.rx * timeScale; d.mesh.rotation.z += d.rz * timeScale; 
+                if (d.mesh.position.y < -30) { scene.remove(d.mesh); debris.splice(i, 1); }
+            }
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
