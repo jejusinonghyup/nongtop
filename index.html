@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>농(農)탑 : 대학생 무한 수확 챌린지</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <style>
+        html, body { margin: 0; padding: 0; width: 100%; height: 100dvh; overflow: hidden; background-color: #87CEEB; touch-action: none; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; user-select: none; }
+        #game-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20;}
+        
+        #hud { position: absolute; top: env(safe-area-inset-top, 20px); left: 0; width: 100%; padding: 0 20px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: flex-start; z-index: 10; }
+        .score-box { background: rgba(255, 255, 255, 0.95); padding: 12px 24px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); border: 2px solid #009944; }
+        #score-display { font-size: 30px; font-weight: 900; color: #ff6b00; }
+        
+        #floor-badge { position: absolute; top: env(safe-area-inset-top, 20px); left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #FFD700, #FFA500); color: #fff; padding: 10px 25px; border-radius: 25px; font-size: 22px; font-weight: 900; box-shadow: 0 4px 15px rgba(255, 165, 0, 0.4); border: 2px solid #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.2); z-index: 11; display: none; animation: bounce 0.3s ease-out; }
+        @keyframes bounce { 0% { transform: translate(-50%, -10px) scale(0.8); } 70% { transform: translate(-50%, 5px) scale(1.1); } 100% { transform: translate(-50%, 0) scale(1); } }
+        
+        #combo-display { font-size: 24px; font-weight: 900; color: #ff2a2a; text-align: right; text-shadow: 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff; opacity: 0; transform: scale(0.5); transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); margin-top: 10px; }
+        #combo-display.show { opacity: 1; transform: scale(1.2); }
+        
+        #message { position: absolute; top: 30%; font-size: 30px; font-weight: 900; color: #FFD700; text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000; opacity: 0; pointer-events: none; z-index: 20; text-align: center; width: 100%; }
+        @keyframes floatUp { 0% { transform: translate(-50%, 0) scale(0.8); opacity: 1; } 50% { transform: translate(-50%, -40px) scale(1.2); opacity: 1; } 100% { transform: translate(-50%, -80px) scale(1); opacity: 0; } }
+        .floating-text { position: absolute; font-weight: 900; pointer-events: none; z-index: 50; text-shadow: 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff; animation: floatUp 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
+        /* 패널 및 버튼 디자인 */
+        .panel { background: rgba(255, 255, 255, 0.98); padding: 35px 25px; border-radius: 24px; box-shadow: 0 15px 35px rgba(0,0,0,0.25); text-align: center; pointer-events: auto; z-index: 30; width: 85%; max-width: 360px; box-sizing: border-box; opacity: 0; transform: translateY(20px); transition: all 0.4s ease-out; }
+        .panel.show { opacity: 1; transform: translateY(0); }
+        .panel h1 { color: #009944; font-size: 36px; margin: 0 0 8px 0; font-weight: 900; text-shadow: 1px 1px 0px rgba(0,0,0,0.05); letter-spacing: -1px;}
+        .panel p { color: #555; font-size: 15px; margin: 0 0 20px 0; line-height: 1.6; font-weight: 500; }
+        .univ-badge { background: #ff6b00; color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; display: inline-block; margin-bottom: 10px; }
+        
+        .input-group { margin-bottom: 14px; text-align: left; }
+        .input-group label { display: block; font-size: 13px; color: #009944; font-weight: 700; margin-bottom: 5px; padding-left: 4px; }
+        .input-group input { width: 100%; padding: 14px; border: 2px solid #ddd; border-radius: 12px; font-size: 15px; font-weight: 600; box-sizing: border-box; transition: all 0.2s; font-family: inherit; }
+        .input-group input:focus { outline: none; border-color: #009944; background-color: #f7fbf8; }
+        
+        .privacy-box { margin-top: 18px; margin-bottom: 18px; text-align: left; background: #f9f9f9; padding: 12px; border-radius: 10px; border: 1px solid #eee; }
+        .privacy-label { display: flex; align-items: center; cursor: pointer; font-size: 13px; color: #333; font-weight: 700; margin-bottom: 8px; }
+        .privacy-label input { width: 18px; height: 18px; margin-right: 8px; accent-color: #009944; }
+        .privacy-details { font-size: 11px; color: #777; line-height: 1.5; padding-left: 26px; }
+        
+        .error-text { color: #ff2a2a; font-size: 13px; font-weight: 600; margin-top: -6px; margin-bottom: 12px; text-align: left; padding-left: 4px; display: none; }
+        
+        .btn { background: linear-gradient(135deg, #009944, #007a36); color: white; border: none; padding: 16px 30px; font-size: 18px; font-weight: bold; border-radius: 30px; box-shadow: 0 5px 15px rgba(0, 153, 68, 0.35); width: 100%; cursor: pointer; pointer-events: auto; transition: transform 0.1s; font-family: inherit; }
+        .btn:active { transform: translateY(3px); box-shadow: 0 2px 5px rgba(0, 153, 68, 0.35); }
+        .btn-sub { background: none; color: #777; border: none; font-size: 14px; font-weight: 600; margin-top: 15px; cursor: pointer; text-decoration: underline; pointer-events: auto;}
+        
+        .btn-rank { background: #333; margin-top: 10px; font-size: 16px; padding: 12px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2); }
+        
+        #game-over-panel { display: none; z-index: 25; }
+        .final-score { font-size: 45px !important; color: #ff6b00 !important; font-weight: 900; margin: 15px 0; }
+
+        /* 랭킹 모달 UI */
+        #rank-modal { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; pointer-events: auto; }
+        .rank-container { background: #fff; width: 85%; max-width: 380px; border-radius: 20px; padding: 25px; box-sizing: border-box; display: flex; flex-direction: column; max-height: 80%; }
+        .rank-header { font-size: 24px; font-weight: 900; color: #009944; margin-bottom: 15px; text-align: center; }
+        .rank-list { overflow-y: auto; flex-grow: 1; margin-bottom: 20px; border-top: 2px solid #eee; padding-top: 10px; }
+        .rank-item { display: flex; justify-content: space-between; padding: 12px 10px; border-bottom: 1px solid #f0f0f0; align-items: center; border-radius: 8px;}
+        .rank-num { font-weight: 900; width: 50px; font-size: 14px;}
+        .rank-name { flex-grow: 1; font-weight: 700; color: #333; text-align: left;}
+        .rank-score { font-weight: 900; color: #ff6b00; }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+
+    <div id="hud">
+        <div class="score-box">
+            <div id="score-display">0 kg</div>
+        </div>
+        <div id="combo-display">2 Combo!</div>
+    </div>
+
+    <div id="floor-badge">1층</div>
+    <div id="message"></div>
+
+    <div class="ui-layer" id="start-screen" style="display: flex;">
+        <div class="panel show" id="start-panel">
+            <span class="univ-badge">대학 축제 한정판 이벤트</span>
+            <h1>농(農)탑</h1>
+            <p>제주시농협 특별 개인 랭킹전!<br>제주 농산물을 쌓아 '수확킹'에 도전하세요!</p>
+            
+            <div id="login-form">
+                <div class="input-group">
+                    <label for="reg-nickname">닉네임</label>
+                    <input type="text" id="reg-nickname" placeholder="랭킹판에 표시될 닉네임" autocomplete="off" maxlength="12">
+                </div>
+                <div class="input-group">
+                    <label for="reg-email">이메일 주소</label>
+                    <input type="email" id="reg-email" placeholder="경품 당첨 시 연락받을 이메일" autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <label for="reg-password">비밀번호 (4자리)</label>
+                    <input type="password" id="reg-password" placeholder="내 기록 보호용 숫자 4자리" maxlength="4" pattern="\d*">
+                </div>
+                
+                <div class="privacy-box">
+                    <label class="privacy-label">
+                        <input type="checkbox" id="privacy-consent">
+                        <span>[필수] 개인정보 수집 및 이용 동의</span>
+                    </label>
+                    <div class="privacy-details">
+                        - 수집 목적 : 랭킹전 참여 및 당첨자 안내<br>
+                        - 수집 항목 : 이메일 주소<br>
+                        - 보유 기간 : <strong style="color: #ff6b00;">시상금/경품 지급 완료 후 즉시 파기</strong>
+                    </div>
+                </div>
+
+                <div class="error-text" id="form-error">필수 입력 항목을 확인해 주세요.</div>
+                <button class="btn" id="btn-login" onclick="processLogin()">랭킹전 참가하기</button>
+                <button class="btn btn-rank" onclick="openRankModal()">🏆 실시간 랭킹 보기</button>
+            </div>
+
+            <div id="welcome-box" style="display: none; padding: 10px 0;">
+                <h3 id="welcome-msg" style="margin: 0 0 10px 0; color: #333; font-size: 22px;"></h3>
+                <p style="font-size: 14px; color: #666; margin-bottom: 20px;">오늘의 최고 기록을 갱신할 준비가 되셨나요?</p>
+                <button class="btn" onclick="startGame()">수확 시작하기</button>
+                <button class="btn btn-rank" onclick="openRankModal()">🏆 실시간 랭킹 보기</button>
+                <button class="btn-sub" onclick="showEditForm()">다른 계정으로 로그인하기</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="ui-layer" id="game-over-panel">
+        <div class="panel" id="result-panel">
+            <h1>수확 종료!</h1>
+            <p id="over-reason-text">앗, 상자가 튕겨 나갔습니다!</p>
+            <div class="final-score" id="final-score-text">0 kg</div>
+            <p style="font-size: 13px; color: #888; line-height: 1.5;">화면을 캡처해 인스타스토리에 공유하고<br>1등 프리미엄 경품의 주인공이 되어보세요!</p>
+            <button class="btn" onclick="resetGame()" style="background: linear-gradient(135deg, #ff8c00, #ff6b00); box-shadow: 0 5px 15px rgba(255, 107, 0, 0.35);">다시 도전하기</button>
+            <button class="btn btn-rank" onclick="openRankModal()">🏆 실시간 랭킹 보기</button>
+        </div>
+    </div>
+
+    <div id="rank-modal">
+        <div class="rank-container">
+            <div class="rank-header">🏆 명예의 전당 (TOP 20)</div>
+            <div class="rank-list" id="leaderboard-list">
+                <div style="padding: 20px; text-align:center; color: #888;">데이터를 불러오는 중입니다...</div>
+            </div>
+            <button class="btn" onclick="closeRankModal()" style="padding: 12px; font-size: 16px;">닫기</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // ----------------------------------------------------
+        // 1. Firebase 데이터베이스 초기화 및 연동
+        // ----------------------------------------------------
+        const firebaseConfig = {
+            apiKey: "AIzaSyAYgBpKGIUKIoZLmrVgjuhMsFm5-NzCWfo",
+            authDomain: "nongtop-game.firebaseapp.com",
+            projectId: "nongtop-game",
+            storageBucket: "nongtop-game.firebasestorage.app",
+            messagingSenderId: "998973140795",
+            appId: "1:998973140795:web:7386ca79286a81f142911e"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ----------------------------------------------------
+        // 2. 유저 인증 및 데이터베이스 통신 로직
+        // ----------------------------------------------------
+        let userSession = null;
+
+        window.onload = function() {
+            init3D(); // 배경 3D 렌더링 시작
+            checkSession();
+            initLeaderboard(); // 실시간 랭킹 리스너 가동
+        };
+
+        function checkSession() {
+            const saved = localStorage.getItem('nongtop_user');
+            if (saved) {
+                userSession = JSON.parse(saved);
+                document.getElementById('login-form').style.display = 'none';
+                document.getElementById('welcome-box').style.display = 'block';
+                document.getElementById('welcome-msg').innerText = `✨ ${userSession.nickname}님 환영합니다!`;
+            } else {
+                document.getElementById('login-form').style.display = 'block';
+                document.getElementById('welcome-box').style.display = 'none';
+            }
+        }
+
+        async function processLogin() {
+            const nickname = document.getElementById('reg-nickname').value.trim();
+            const email = document.getElementById('reg-email').value.trim();
+            const password = document.getElementById('reg-password').value.trim();
+            const consentChecked = document.getElementById('privacy-consent').checked;
+            const errorEl = document.getElementById('form-error');
+            const btn = document.getElementById('btn-login');
+
+            if (!nickname || !email || password.length !== 4) {
+                errorEl.innerText = "모든 항목을 정확히 입력해 주세요 (비밀번호 숫자 4자리)."; errorEl.style.display = 'block'; return;
+            }
+            if(!email.includes('@')) {
+                errorEl.innerText = "올바른 이메일 주소 형식을 입력해 주세요."; errorEl.style.display = 'block'; return;
+            }
+            if(!consentChecked) {
+                errorEl.innerText = "개인정보 수집 및 이용에 동의해 주세요."; errorEl.style.display = 'block'; return;
+            }
+
+            errorEl.style.display = 'none';
+            btn.innerText = "서버 접속 중...";
+            btn.style.opacity = "0.7";
+            btn.disabled = true;
+
+            try {
+                const userRef = db.collection('users').doc(nickname);
+                const docSnap = await userRef.get();
+
+                if (docSnap.exists) {
+                    // 기존 유저인 경우: 비밀번호 검증
+                    if (docSnap.data().password !== password) {
+                        errorEl.innerText = "이미 사용 중인 닉네임이거나 비밀번호가 틀립니다."; 
+                        errorEl.style.display = 'block';
+                        btn.innerText = "랭킹전 참가하기"; btn.style.opacity = "1"; btn.disabled = false;
+                        return;
+                    }
+                } else {
+                    // 신규 유저 생성
+                    await userRef.set({
+                        nickname: nickname,
+                        email: email,
+                        password: password,
+                        topScore: 0,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+                
+                // 로그인 성공 세션 저장
+                userSession = { 
+                    nickname: nickname, 
+                    email: email, 
+                    password: password, 
+                    topScore: docSnap.exists ? docSnap.data().topScore : 0 
+                };
+                localStorage.setItem('nongtop_user', JSON.stringify(userSession));
+                
+                btn.innerText = "랭킹전 참가하기"; btn.style.opacity = "1"; btn.disabled = false;
+                startGame();
+            } catch (error) {
+                console.error("DB Login Error:", error);
+                errorEl.innerText = "네트워크 오류가 발생했습니다. 잠시 후 시도해주세요.";
+                errorEl.style.display = 'block';
+                btn.innerText = "랭킹전 참가하기"; btn.style.opacity = "1"; btn.disabled = false;
+            }
+        }
+
+        function showEditForm() {
+            localStorage.removeItem('nongtop_user'); userSession = null;
+            document.getElementById('reg-nickname').value = ''; document.getElementById('reg-password').value = '';
+            document.getElementById('privacy-consent').checked = false; checkSession();
+        }
+
+        // 실시간 랭킹보드 리스너 (데이터가 바뀔때마다 즉시 새로고침)
+        function initLeaderboard() {
+            db.collection('users').orderBy('topScore', 'desc').limit(20)
+              .onSnapshot((snapshot) => {
+                  const listEl = document.getElementById('leaderboard-list');
+                  listEl.innerHTML = '';
+                  let rank = 1;
+                  
+                  snapshot.forEach((doc) => {
+                      const data = doc.data();
+                      if(data.topScore > 0) {
+                          const item = document.createElement('div');
+                          item.className = 'rank-item';
+                          
+                          let rankBadge = `${rank}위`;
+                          if(rank === 1) rankBadge = '🥇 1위';
+                          if(rank === 2) rankBadge = '🥈 2위';
+                          if(rank === 3) rankBadge = '🥉 3위';
+                          
+                          const isMe = userSession && userSession.nickname === data.nickname;
+                          if(isMe) item.style.background = '#e6f4ea'; // 내 기록 하이라이트
+
+                          item.innerHTML = `
+                              <div class="rank-num" style="${rank <= 3 ? 'color:#ff6b00;' : ''}">${rankBadge}</div>
+                              <div class="rank-name">${data.nickname}${isMe ? ' (나)' : ''}</div>
+                              <div class="rank-score">${data.topScore} kg</div>
+                          `;
+                          listEl.appendChild(item);
+                          rank++;
+                      }
+                  });
+                  
+                  if (rank === 1) {
+                      listEl.innerHTML = '<div style="padding: 20px; text-align:center; color: #888; font-size:14px; line-height: 1.6;">아직 수확 기록이 없습니다.<br>첫 번째 수확킹이 되어보세요!</div>';
+                  }
+              });
+        }
+
+        function openRankModal() { document.getElementById('rank-modal').style.display = 'flex'; }
+        function closeRankModal() { document.getElementById('rank-modal').style.display = 'none'; }
+
+
+        // ----------------------------------------------------
+        // 3. 인게임 그래픽 & 물리 엔진 (기존 100% 동일 유지)
+        // ----------------------------------------------------
+        let scene, camera, renderer, boxes = [], debris = [], gameState = 'start';
+        let currentFloor = 1, currentScore = 0, comboCount = 0;
+        const boxHeight = 1.5, originalBoxSize = 5;
+        let currentBox = null, previousBox = null, movingAxis = 'x', movingDir = 1, speed = 0.15;
+        let targetCamY = 15, currentCamY = 15, targetLookY = 0, currentLookY = 0;
+
+        const specialProducts = [
+            { name: '레몬100', color: '#1A3C40' }, { name: '발라먹차', color: '#1A3C40' }, { name: '키위젤리', color: '#1A3C40' }
+        ];
+        const normalProducts = [
+            { name: '제주 감귤', emoji: '🍊', color: '#FFA500', textColor: '#FFFFFF' },
+            { name: '제주 흙당근', emoji: '🥕', color: '#FF7F50', textColor: '#FFFFFF' },
+            { name: '제주 브로콜리', emoji: '🥦', color: '#2E8B57', textColor: '#FFFFFF' },
+            { name: '제주 마늘', emoji: '🧄', color: '#F5DEB3', textColor: '#333333' }, 
+            { name: '제주 초당옥수수', emoji: '🌽', color: '#FFD700', textColor: '#333333' } 
+        ];
+
+        function init3D() {
+            scene = new THREE.Scene(); scene.background = new THREE.Color('#87CEEB'); scene.fog = new THREE.Fog('#87CEEB', 20, 100);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            dirLight.position.set(10, 20, 10); dirLight.castShadow = true;
+            dirLight.shadow.camera.left = -20; dirLight.shadow.camera.right = 20; dirLight.shadow.camera.top = 20; dirLight.shadow.camera.bottom = -20;
+            scene.add(dirLight);
+
+            const aspect = window.innerWidth / window.innerHeight;
+            camera = new THREE.OrthographicCamera(-12 * aspect, 12 * aspect, 12, -12, -100, 1000);
+            camera.position.set(12, 15, 12); camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(window.devicePixelRatio); renderer.shadowMap.enabled = true;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            createBaseBox();
+            window.addEventListener('resize', onWindowResize, false);
+            window.addEventListener('pointerdown', handleTap);
+            animate();
+        }
+
+        function onWindowResize() {
+            const aspect = window.innerWidth / window.innerHeight;
+            camera.left = -12 * aspect; camera.right = 12 * aspect; camera.top = 12; camera.bottom = -12;
+            camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function createTexture(item, isSpecial, isBase = false) {
+            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256; const ctx = canvas.getContext('2d');
+            ctx.fillStyle = isBase ? '#8B4513' : item.color; ctx.fillRect(0, 0, 256, 256);
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            
+            if (isBase) {
+                ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 35px Pretendard, Arial'; ctx.fillText("제주시농협", 128, 100);
+                ctx.font = 'bold 25px Pretendard, Arial'; ctx.fillText("수확 바구니", 128, 150);
+            } else if (isSpecial) {
+                ctx.fillStyle = '#FFD700'; ctx.font = 'bold 30px Pretendard, Arial'; ctx.fillText("제주시농협", 128, 60);
+                ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 45px Pretendard, Arial'; ctx.fillText(item.name, 128, 130);
+                ctx.fillStyle = '#FF4500'; ctx.font = 'bold 25px Pretendard, Arial'; ctx.fillText("★ 100kg 보너스 ★", 128, 200);
+            } else {
+                ctx.fillStyle = item.textColor; ctx.font = 'bold 30px Pretendard, Arial'; ctx.fillText(item.name, 128, 60);
+                ctx.font = '80px Arial'; ctx.fillText(item.emoji, 128, 150);
+            }
+            ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 15; ctx.strokeRect(7.5, 7.5, 241, 241);
+            return new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(canvas), roughness: 0.7 });
+        }
+
+        function createBaseBox() {
+            const box = new THREE.Mesh(new THREE.BoxGeometry(originalBoxSize, boxHeight, originalBoxSize), createTexture(null, false, true));
+            box.position.set(0, boxHeight * 0.5, 0); box.receiveShadow = true; box.castShadow = true;
+            scene.add(box); boxes.push({ mesh: box, width: originalBoxSize, depth: originalBoxSize, isSpecial: false });
+            previousBox = boxes[0];
+        }
+
+        function createNewBox() {
+            currentFloor++; speed = Math.min(0.15 + (currentFloor * 0.006), 0.45); 
+            const badge = document.getElementById('floor-badge'); badge.innerText = `${currentFloor}층`; badge.style.display = 'block'; badge.style.animation = 'none'; badge.offsetHeight; badge.style.animation = null;
+
+            const prev = boxes[boxes.length - 1];
+            const isSpecial = Math.random() < 0.15; 
+            const itemData = isSpecial ? specialProducts[Math.floor(Math.random() * specialProducts.length)] : normalProducts[Math.floor(Math.random() * normalProducts.length)];
+
+            const box = new THREE.Mesh(new THREE.BoxGeometry(prev.width, boxHeight, prev.depth), createTexture(itemData, isSpecial));
+            box.castShadow = true; box.receiveShadow = true;
+
+            movingAxis = currentFloor % 2 === 0 ? 'x' : 'z'; movingDir = Math.random() > 0.5 ? 1 : -1;
+            const currentYPos = (currentFloor - 0.5) * boxHeight;
+            box.position.set(movingAxis === 'x' ? 16 * movingDir : prev.mesh.position.x, currentYPos, movingAxis === 'z' ? 16 * movingDir : prev.mesh.position.z);
+
+            scene.add(box);
+            currentBox = { mesh: box, width: prev.width, depth: prev.depth, isSpecial: isSpecial, productName: itemData.name };
+            boxes.push(currentBox); targetCamY = currentYPos + 15; targetLookY = currentYPos - 2;
+        }
+
+        function showFloatingPoints(addedKg, isPerfect) {
+            if(!currentBox) return;
+            const el = document.createElement('div'); el.className = 'floating-text'; el.innerText = `+${addedKg} kg`;
+            el.style.color = (currentBox.isSpecial && isPerfect) ? '#FFD700' : (isPerfect ? '#00ff00' : '#ff6b00');
+            el.style.fontSize = (currentBox.isSpecial && isPerfect) ? '38px' : (isPerfect ? '32px' : '24px');
+            
+            const v = currentBox.mesh.position.clone(); v.project(camera);
+            el.style.left = `${(v.x * 0.5 + 0.5) * window.innerWidth}px`; el.style.top = `${(v.y * -0.5 + 0.5) * window.innerHeight - 30}px`; 
+            document.body.appendChild(el); setTimeout(() => el.remove(), 1000);
+        }
+
+        function handleTap(e) {
+            if (e.target.closest('.panel') || e.target.closest('.btn-rank') || e.target.closest('#rank-modal')) return;
+            if (gameState !== 'playing') return;
+
+            const prev = boxes[boxes.length - 2], curr = currentBox;
+            const diff = curr.mesh.position[movingAxis] - prev.mesh.position[movingAxis], absDiff = Math.abs(diff);
+            const currentSize = movingAxis === 'x' ? curr.width : curr.depth;
+
+            if (absDiff > currentSize) {
+                if (curr.isSpecial) showMessage(`내 ${curr.productName} 엎어짐... 😱`, '#ff2a2a');
+                document.getElementById('over-reason-text').innerText = curr.isSpecial ? `앗! 스페셜 보너스 박스를 통째로 떨어뜨렸습니다!` : `앗, 상자가 허공으로 떨어졌습니다!`;
+                scene.remove(curr.mesh); scene.add(curr.mesh); 
+                debris.push({ mesh: curr.mesh, vx: movingAxis === 'x' ? movingDir * speed * 1.5 : 0, vy: 0.1, vz: movingAxis === 'z' ? movingDir * speed * 1.5 : 0, rx: movingAxis === 'z' ? 0.08 * movingDir : 0, rz: movingAxis === 'x' ? -0.08 * movingDir : 0 });
+                endGame(); return;
+            }
+
+            if (absDiff <= 0.4) {
+                curr.mesh.position[movingAxis] = prev.mesh.position[movingAxis]; comboCount++;
+                let gainedKg = Math.floor(curr.width * curr.depth);
+                if (curr.isSpecial) { gainedKg += 100; showMessage(`✨ ${curr.productName} 완벽 수확! +100kg 🎉`, '#FFD700'); } 
+                else if (comboCount > 1) { showMessage(`퍼펙트! ${comboCount} 연속`, '#00ff00'); }
+                
+                const totalGained = gainedKg + (comboCount * 5);
+                updateScore(totalGained); showFloatingPoints(totalGained, true); showCombo(); createNewBox(); return;
+            }
+
+            if (curr.isSpecial) showMessage(`앗! 아까운 ${curr.productName}... 😭`, '#ff8c00');
+            comboCount = 0; document.getElementById('combo-display').classList.remove('show');
+            const overlap = currentSize - absDiff;
+            if (movingAxis === 'x') { curr.width = overlap; } else { curr.depth = overlap; }
+
+            const newPos = prev.mesh.position[movingAxis] + (diff / 2);
+            curr.mesh.position[movingAxis] = newPos; curr.mesh.geometry.dispose(); curr.mesh.geometry = new THREE.BoxGeometry(curr.width, boxHeight, curr.depth);
+
+            const dSize = absDiff, dPos = newPos + (overlap / 2 + dSize / 2) * Math.sign(diff);
+            const dMesh = new THREE.Mesh(new THREE.BoxGeometry(movingAxis === 'x' ? dSize : curr.width, boxHeight, movingAxis === 'z' ? dSize : curr.depth), curr.mesh.material);
+            dMesh.position.set(movingAxis === 'x' ? dPos : curr.mesh.position.x, (currentFloor - 0.5) * boxHeight, movingAxis === 'z' ? dPos : curr.mesh.position.z);
+            scene.add(dMesh); debris.push({ mesh: dMesh, vx: movingAxis === 'x' ? Math.sign(diff) * 0.1 : 0, vy: 0.05, vz: movingAxis === 'z' ? Math.sign(diff) * 0.1 : 0, rx: movingAxis === 'z' ? 0.07 * Math.sign(diff) : 0, rz: movingAxis === 'x' ? -0.07 * Math.sign(diff) : 0 });
+
+            const gainedKg = Math.max(1, Math.floor(curr.width * curr.depth));
+            updateScore(gainedKg); showFloatingPoints(gainedKg, false); createNewBox();
+        }
+
+        function updateScore(addKg) { currentScore += addKg; document.getElementById('score-display').innerText = `${currentScore} kg`; }
+        function showCombo() { if (comboCount >= 2) { const el = document.getElementById('combo-display'); el.innerText = `${comboCount} Combo!`; el.classList.add('show'); el.style.animation = 'none'; el.offsetHeight; el.style.animation = null; } }
+        
+        function showMessage(text, color) {
+            const msg = document.getElementById('message'); msg.innerText = text; msg.style.color = color; msg.style.opacity = 1;
+            let start = null;
+            function animateMsg(time) {
+                if(!start) start = time;
+                if (time - start < 1200) { msg.style.opacity = 1 - ((time - start) / 1200); requestAnimationFrame(animateMsg); } else { msg.style.opacity = 0; }
+            }
+            requestAnimationFrame(animateMsg);
+        }
+
+        function startGame() {
+            document.getElementById('start-screen').style.display = 'none'; document.getElementById('start-panel').classList.remove('show');
+            document.getElementById('floor-badge').style.display = 'block'; gameState = 'playing'; createNewBox();
+        }
+
+        function endGame() {
+            gameState = 'gameover';
+            
+            // 데이터베이스에 최고 점수 갱신 (비동기 처리)
+            if (userSession && currentScore > userSession.topScore) {
+                userSession.topScore = currentScore;
+                localStorage.setItem('nongtop_user', JSON.stringify(userSession));
+                
+                db.collection('users').doc(userSession.nickname).update({
+                    topScore: currentScore,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }).catch(err => console.error("점수 업데이트 실패", err));
+            }
+
+            setTimeout(() => {
+                document.getElementById('game-over-panel').style.display = 'flex';
+                setTimeout(() => { document.getElementById('result-panel').classList.add('show'); }, 50);
+                document.getElementById('final-score-text').innerText = `${currentScore} kg`;
+            }, 800); 
+        }
+
+        function resetGame() {
+            document.getElementById('result-panel').classList.remove('show');
+            setTimeout(() => { document.getElementById('game-over-panel').style.display = 'none'; }, 300);
+            boxes.forEach(b => scene.remove(b.mesh)); debris.forEach(d => scene.remove(d.mesh));
+            boxes = []; debris = []; currentFloor = 1; currentScore = 0; comboCount = 0; updateScore(0);
+            document.getElementById('floor-badge').innerText = `1층`; document.getElementById('combo-display').classList.remove('show');
+            targetCamY = 15; currentCamY = 15; targetLookY = 0; currentLookY = 0; camera.position.set(12, 15, 12); camera.lookAt(0, 0, 0);
+            createBaseBox(); gameState = 'playing'; createNewBox();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (gameState === 'playing' && currentBox) {
+                currentBox.mesh.position[movingAxis] += speed * movingDir;
+                if (currentBox.mesh.position[movingAxis] > 16) movingDir = -1; if (currentBox.mesh.position[movingAxis] < -16) movingDir = 1;
+            }
+            currentCamY += (targetCamY - currentCamY) * 0.08; currentLookY += (targetLookY - currentLookY) * 0.08;
+            camera.position.y = currentCamY; camera.lookAt(0, currentLookY, 0);
+            for (let i = debris.length - 1; i >= 0; i--) {
+                let d = debris[i]; d.vy -= 0.03; d.mesh.position.x += d.vx; d.mesh.position.y += d.vy; d.mesh.position.z += d.vz;
+                d.mesh.rotation.x += d.rx; d.mesh.rotation.z += d.rz; if (d.mesh.position.y < -30) { scene.remove(d.mesh); debris.splice(i, 1); }
+            }
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
