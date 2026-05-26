@@ -38,10 +38,13 @@
         .input-group input { width: 100%; padding: 14px; border: 2px solid #ddd; border-radius: 12px; font-size: 15px; font-weight: 600; box-sizing: border-box; transition: all 0.2s; font-family: inherit; }
         .input-group input:focus { outline: none; border-color: #009944; background-color: #f7fbf8; }
         
-        .privacy-box { margin-top: 18px; margin-bottom: 18px; text-align: left; background: #f9f9f9; padding: 12px; border-radius: 10px; border: 1px solid #eee; }
+        .privacy-box { margin-top: 18px; margin-bottom: 10px; text-align: left; background: #f9f9f9; padding: 12px; border-radius: 10px; border: 1px solid #eee; }
         .privacy-label { display: flex; align-items: center; cursor: pointer; font-size: 13px; color: #333; font-weight: 700; margin-bottom: 8px; }
         .privacy-label input { width: 18px; height: 18px; margin-right: 8px; accent-color: #009944; }
         .privacy-details { font-size: 11px; color: #777; line-height: 1.5; padding-left: 26px; }
+        
+        /* 👇 대학생 한정 참여 고지 디자인 스타일 */
+        .univ-notice-box { text-align: left; font-size: 11px; color: #ff2a2a; line-height: 1.4; font-weight: 700; background: #fff0f0; padding: 10px; border-radius: 10px; border: 1px solid #ffe3e3; margin-bottom: 16px; }
         
         .error-text { color: #ff2a2a; font-size: 13px; font-weight: 600; margin-top: -6px; margin-bottom: 12px; text-align: left; padding-left: 4px; display: none; }
         
@@ -109,6 +112,10 @@
                     </div>
                 </div>
 
+                <div class="univ-notice-box">
+                    ⚠️ 안내: 본 이벤트는 대학생 한정 참여 가능하며, 대학생이 아닌 경우 랭킹에 오르더라도 시상금 및 경품 지급이 불가할 수 있습니다.
+                </div>
+
                 <div class="error-text" id="form-error">필수 입력 항목을 확인해 주세요.</div>
                 <button class="btn" id="btn-login" onclick="processLogin()">랭킹전 참가하기</button>
                 <button class="btn btn-rank" onclick="openRankModal()">🏆 실시간 랭킹 보기</button>
@@ -163,23 +170,20 @@
         const db = firebase.firestore();
 
         // ----------------------------------------------------
-        // 2. 유저 인증 및 데이터베이스 & 시간 제한 로직
+        // 2. 유저 인증 및 데이터베이스 & 마감 제한 로직
         // ----------------------------------------------------
         let userSession = null;
 
+        // 👇 수정된 마감 시간 전용 검사 함수 (시작 제한 없음, 5/29 18:00에 칼마감)
         function checkEventTime() {
             const now = new Date();
-            const startTime = new Date("2026-05-27T15:00:00+09:00");
+            // 한국 표준시 마감 기준시 설정 (2026년 5월 29일 18시)
             const endTime = new Date("2026-05-29T18:00:00+09:00");
 
-            if (now >= startTime && now <= endTime) {
-                return true; 
+            if (now <= endTime) {
+                return true; // 마감 시간 전이면 상시 테스트 및 플레이 허용!
             } else {
-                if (now < startTime) {
-                    alert("아직 농탑 수확 챌린지 시작 전입니다! 🍊\n\n(운영 기간: 5월 27일 15:00 ~ 5월 29일 18:00)");
-                } else {
-                    alert("올해의 농탑 수확 챌린지가 마감되었습니다! 💦\n\n참여해 주신 모든 분들께 감사드립니다.");
-                }
+                alert("올해의 농탑 수확 챌린지가 마감되었습니다! 💦\n\n참여해 주신 모든 분들께 감사드립니다.");
                 return false; 
             }
         }
@@ -238,7 +242,6 @@
                         return;
                     }
                 } else {
-                    // 신규 회원 등록 시 topFloor 필드 추가
                     await userRef.set({
                         nickname: nickname, email: email, password: password,
                         topScore: 0, topFloor: 0,
@@ -268,7 +271,6 @@
             document.getElementById('privacy-consent').checked = false; checkSession();
         }
 
-        // 👇 실시간 2차 정렬 시스템 (1순위: kg, 2순위: 층수 동률 처리)
         function initLeaderboard() {
             db.collection('users').orderBy('topScore', 'desc').limit(50)
               .onSnapshot((snapshot) => {
@@ -287,15 +289,14 @@
                       }
                   });
 
-                  // 🚨 자바스크립트 내부 정렬 가동 (동률 점수 시 층수 정렬)
                   users.sort((a, b) => {
                       if (b.topScore !== a.topScore) {
-                          return b.topScore - a.topScore; // 점수 우선 내림차순
+                          return b.topScore - a.topScore; 
                       }
-                      return b.topFloor - a.topFloor; // 점수 같으면 층수 내림차순
+                      return b.topFloor - a.topFloor; 
                   });
 
-                  const displayUsers = users.slice(0, 20); // 상위 20명 확정
+                  const displayUsers = users.slice(0, 20); 
                   let rank = 1;
                   
                   displayUsers.forEach((user) => {
@@ -310,7 +311,6 @@
                       const isMe = userSession && userSession.nickname === user.nickname;
                       if(isMe) item.style.background = '#e6f4ea'; 
 
-                      // 층수 표시 추가 적용
                       item.innerHTML = `
                           <div class="rank-num" style="${rank <= 3 ? 'color:#ff6b00;' : ''}">${rankBadge}</div>
                           <div class="rank-name">${user.nickname}${isMe ? ' (나)' : ''}</div>
@@ -338,7 +338,7 @@
         const boxHeight = 1.5, originalBoxSize = 5;
         let currentBox = null, previousBox = null, movingAxis = 'x', movingDir = 1, speed = 0.15;
         let targetCamY = 15, currentCamY = 15, targetLookY = 0, currentLookY = 0;
-        let clock = new THREE.Clock(); // 기기 속도 최적화 시계
+        let clock = new THREE.Clock(); 
 
         const specialProducts = [
             { name: '레몬100', color: '#1A3C40' }, { name: '발라먹차', color: '#1A3C40' }, { name: '키위젤리', color: '#1A3C40' }
@@ -503,7 +503,6 @@
         function endGame() {
             gameState = 'gameover';
             
-            // 🚨 점수가 기존 기록보다 높거나, 점수가 같은데 층수가 더 높은 최적의 기록일 때 서버 데이터 업데이트
             const isNewScoreHigher = currentScore > userSession.topScore;
             const isScoreEqualButFloorHigher = (currentScore === userSession.topScore) && (currentFloor > userSession.topFloor);
 
