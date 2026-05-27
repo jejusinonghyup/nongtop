@@ -62,6 +62,11 @@
         #rank-modal { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center; pointer-events: auto; }
         .rank-container { background: #fff; width: 85%; max-width: 380px; border-radius: 20px; padding: 25px; box-sizing: border-box; display: flex; flex-direction: column; max-height: 80%; }
         .rank-header { font-size: 24px; font-weight: 900; color: #009944; margin-bottom: 15px; text-align: center; }
+        
+        /* 👇 추가된 실시간 타이머 디자인 */
+        .rank-timer-box { text-align: center; font-size: 13px; font-weight: 500; color: #555; background: #f7fbf8; padding: 10px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #d1eedc; line-height: 1.5; }
+        .rank-timer-box b { font-size: 15px; font-weight: 800; color: #ff6b00; }
+        
         .rank-list { overflow-y: auto; flex-grow: 1; margin-bottom: 20px; border-top: 2px solid #eee; padding-top: 10px; }
         .rank-item { display: flex; justify-content: space-between; padding: 12px 10px; border-bottom: 1px solid #f0f0f0; align-items: center; border-radius: 8px;}
         .rank-num { font-weight: 900; width: 55px; font-size: 14px;}
@@ -95,7 +100,7 @@
                 </div>
                 <div class="input-group">
                     <label for="reg-email">이메일 주소</label>
-                    <input type="email" id="reg-email" placeholder="시상금/경품 수령 시 연락받을 이메일" autocomplete="off">
+                    <input type="email" id="reg-email" placeholder="상금/경품 수령을 위해 연락받을 이메일" autocomplete="off">
                 </div>
                 <div class="input-group">
                     <label for="reg-password">휴대폰 뒷자리 (4자리)</label>
@@ -109,8 +114,8 @@
                     </label>
                     <div class="privacy-details">
                         - 수집 목적 : 랭킹전 참여 및 당첨자 안내<br>
-                        - 수집 항목 : 이메일 주소<br>
-                        - 보유 기간 : <strong style="color: #ff6b00;">시상금/경품 지급 완료 후 즉시 파기</strong>
+                        - 수집 항목 : 이메일 주소, 휴대폰 뒷자리(4자리)<br>
+                        - 보유 기간 : <strong style="color: #ff6b00;">상금/경품 지급 완료 후 즉시 파기</strong>
                     </div>
                 </div>
 
@@ -147,6 +152,9 @@
     <div id="rank-modal">
         <div class="rank-container">
             <div class="rank-header">🏆 명예의 전당 (TOP 20)</div>
+            
+            <div id="rank-timer-box" class="rank-timer-box">타이머 로딩 중...</div>
+
             <div class="rank-list" id="leaderboard-list">
                 <div style="padding: 20px; text-align:center; color: #888;">데이터를 불러오는 중입니다...</div>
             </div>
@@ -217,7 +225,6 @@
             const errorEl = document.getElementById('form-error');
             const btn = document.getElementById('btn-login');
 
-            // 👇 안내 문구 수정 (휴대폰 뒷자리 숫자 4개)
             if (!nickname || !email || password.length !== 4) {
                 errorEl.innerText = "모든 항목을 정확히 입력해 주세요 (휴대폰 뒷자리 숫자 4개)."; errorEl.style.display = 'block'; return;
             }
@@ -237,7 +244,6 @@
 
                 if (docSnap.exists) {
                     if (docSnap.data().password !== password) {
-                        // 👇 안내 문구 수정
                         errorEl.innerText = "이미 사용 중인 닉네임이거나 휴대폰 뒷자리가 틀립니다."; 
                         errorEl.style.display = 'block';
                         btn.innerText = "랭킹전 참가하기"; btn.style.opacity = "1"; btn.disabled = false;
@@ -328,8 +334,54 @@
               });
         }
 
-        function openRankModal() { document.getElementById('rank-modal').style.display = 'flex'; }
-        function closeRankModal() { document.getElementById('rank-modal').style.display = 'none'; }
+        // 👇 추가된 실시간 타이머 로직
+        let rankTimerInterval;
+
+        function updateRankTimer() {
+            const timerBox = document.getElementById('rank-timer-box');
+            if (!timerBox) return;
+
+            const now = new Date();
+            const endTime = new Date("2026-05-29T18:00:00+09:00");
+            
+            // 현재 시각 포맷팅
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const h = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            const currentStr = `${m}월 ${d}일 ${h}:${min}:${s}`;
+
+            const diff = endTime - now;
+            
+            if (diff <= 0) {
+                timerBox.innerHTML = `현재 시각: ${currentStr}<br>⏳ <b>수확 챌린지가 마감되었습니다!</b>`;
+                return;
+            }
+
+            const dDay = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const dHour = Math.floor((diff / (1000 * 60 * 60)) % 24);
+            const dMin = Math.floor((diff / 1000 / 60) % 60);
+            const dSec = Math.floor((diff / 1000) % 60);
+
+            let remainStr = "";
+            if (dDay > 0) remainStr += `${dDay}일 `;
+            if (dHour > 0 || dDay > 0) remainStr += `${dHour}시간 `;
+            remainStr += `${dMin}분 ${dSec}초`;
+
+            timerBox.innerHTML = `현재 시각: ${currentStr}<br>마감까지 남은 시간: <b>${remainStr}</b>`;
+        }
+
+        function openRankModal() { 
+            document.getElementById('rank-modal').style.display = 'flex'; 
+            updateRankTimer(); // 모달 켰을 때 즉시 업데이트
+            rankTimerInterval = setInterval(updateRankTimer, 1000); // 1초마다 반복
+        }
+        
+        function closeRankModal() { 
+            document.getElementById('rank-modal').style.display = 'none'; 
+            clearInterval(rankTimerInterval); // 모달 닫으면 타이머 정지
+        }
 
 
         // ----------------------------------------------------
